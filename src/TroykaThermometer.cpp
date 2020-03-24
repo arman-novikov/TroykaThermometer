@@ -1,42 +1,33 @@
-/****************************************************************************/
-//  Function:       cpp file for TroykaThermometer
-//  Hardware:       TMP36
-//  Arduino IDE:    Arduino 1.8.3
-//  Author:         Igor Dementiev
-//  Date:           Jan 17, 2018
-//  Version:        v1.0.0
-//  by www.amperka.ru
-/****************************************************************************/
-
 #include "TroykaThermometer.h"
 
-#define SAMPLE_TIMES    32
-
-TroykaThermometer::TroykaThermometer(uint8_t pin) {
-    _pin = pin;
+TroykaThermometer::TroykaThermometer(ADC_HandleTypeDef * const hadc):
+	_hadc(hadc)
+{
+	HAL_ADCEx_Calibration_Start(this->_hadc);
 }
 
-void TroykaThermometer::read() {
-    int sensorADC = 0;
-    float sensorVoltage = 0;
-    for (int i = 0; i < SAMPLE_TIMES; i++) {
-        sensorADC += analogRead(_pin);
-    }
-    sensorADC = sensorADC >> 5;
-  	sensorVoltage = sensorADC * (OPERATING_VOLTAGE / ADC_VALUE_MAX);
-    _sensorTemperatureC = (sensorVoltage - 0.5) * 100.0;
-    _sensorTemperatureK = _sensorTemperatureC + CELSIUS_TO_KELVIN;
-    _sensorTemperatureF = (_sensorTemperatureC * 9.0 / 5.0) + 32.0;
+float TroykaThermometer::getTemperatureC()
+{
+	static constexpr float VOLTAGE_PER_DISCRETE_STEP =
+			this->THERMO_OPERATING_VOLTAGE / this->THERMO_ADC_VALUE_MAX;
+	float sensorADC = 0;
+	float sensorVoltage = 0.0F;
+
+	for (size_t i = 0; i < this->THERMO_SAMPLE_TIMES; ++i)
+		sensorADC += static_cast<float>(this->_get_pin_value());
+
+	sensorADC /= this->THERMO_SAMPLE_TIMES;
+	sensorVoltage = sensorADC *	VOLTAGE_PER_DISCRETE_STEP;
+
+	return (sensorVoltage - 0.5) * 100.0;
 }
 
-float TroykaThermometer::getTemperatureC() {
-    return _sensorTemperatureC;
-}
-
-float TroykaThermometer::getTemperatureK() {
-    return _sensorTemperatureK;
-}
-
-float TroykaThermometer::getTemperatureF() {
-    return _sensorTemperatureF;
+uint16_t TroykaThermometer::_get_pin_value()
+{
+	uint16_t res;
+	HAL_ADC_Start(this->_hadc);
+	HAL_ADC_PollForConversion(this->_hadc, this->POLL_FOR_CONVERSION_TIMEOUT);
+	res = HAL_ADC_GetValue(this->_hadc);
+	HAL_ADC_Stop(this->_hadc);
+	return res;
 }
